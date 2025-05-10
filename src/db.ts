@@ -1,6 +1,6 @@
 import mongoose, { Schema, model, connect } from "mongoose";
 import dotenv from 'dotenv';
-dotenv.config();
+
 const UserSchema = new Schema({
   username: {
     type: String,
@@ -33,7 +33,7 @@ const UserSchema = new Schema({
 
 const ContentSchema = new Schema({
   title: {
-    type: String,
+    type: String,enum:["document", "tweet", "youtube", "link"],
     required: [true, 'Title is required'],
     trim: true,
     maxlength: [200, 'Title cannot exceed 200 characters']

@@ -4,11 +4,11 @@ dotenv.config();
 import express from "express";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
-import { z } from "zod";
+import { array, z } from "zod";
 import bcrypt from "bcrypt";
 import { User, Content, Tag, Link } from "./db"; 
 import connectDB from "./db";
-import { emit } from 'process';
+import { emit, title } from 'process';
 
 
 const app = express();
@@ -38,7 +38,13 @@ const signinSchema=z.object({
   password:z.string().min(1,"password is requiresd")
 })
 
+const constentsschema=z.object({
+  title:z.string().min(1,""),
+  link :z.string().url(""),
+  type :z.enum(["document", "tweet", "youtube", "link"]),
+  tags :z.array(z.string()).nonempty(""),
 
+})
 
 app.post("/api/v1/signup", async (req, res) => {
   const validationResult = signupSchema.safeParse(req.body);
@@ -108,6 +114,9 @@ app.post("/api/v1/signup", async (req, res) => {
 
 app.post("/api/v1/signin", async (req, res) => {
   const validation = signinSchema.safeParse(req.body);
+
+
+
   if (!validation.success) {
       res.status(400).json({
       success: false,
@@ -115,6 +124,7 @@ app.post("/api/v1/signin", async (req, res) => {
      
     });
   }
+
 
   const { email, password } = req.body;
 
@@ -160,7 +170,39 @@ app.post("/api/v1/signin", async (req, res) => {
   }
 });
 
+
+
 app.post("/api/v1/content",(req,res)=>{
+
+  try{
+    const contentvalidation = constentsschema.safeParse(req.body);
+    
+if(!contentvalidation .success){
+ return  res.status(400).json({
+    message:"validtion failed",
+  })
+}
+const token=req.body.token;
+if(!token){
+  return res.status(401).json({ message: "Token missing" });
+}
+
+ let decode = jwt.verify(token,'secret')
+
+ const { title, link, type, tags } = req.body;
+ const content = await Content.create({ title, link, type, tags });
+ return res.status(201).json({
+  message:"content created ",
+  content
+ })
+
+  }
+
+  catch(error){
+ res.status(500).json({
+  message:""
+ })
+  }
     
 })
 app.post("/api/v1/getoncontent",(req,res)=>{
