@@ -3,4 +3,4 @@ A digital repository to store, organize, and retrieve your knowledge, resources,
 
 
 UI prototype :
-![image](https://github.com/user-attachments/assets/898c53af-c8a7-47e5-addf-2dfacec09b3c)
+![image](https://github.com/user-attachments/assets/9c2f3096-f32e-4b4c-a7a2-21ef7ecc4763)
