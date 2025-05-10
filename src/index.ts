@@ -1,17 +1,165 @@
+import dotenv from 'dotenv'
+dotenv.config();
+
 import express from "express";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
-const app=express();
-app.use(express.json())
+import { z } from "zod";
+import bcrypt from "bcrypt";
+import { User, Content, Tag, Link } from "./db"; 
+import connectDB from "./db";
+import { emit } from 'process';
 
 
-app.post("/api/v1/signup",(req,res)=>{
+const app = express();
+app.use(express.json());
 
+connectDB(); 
+
+
+
+
+
+const signupSchema = z.object({
+  username: z.string()
+    .min(3, "Username must be at least 3 characters")
+    .max(10, "Username cannot exceed 10 characters")
+    .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores"),
+  password: z.string()
+    .min(8, "Password must be at least 8 characters")
+    .max(20, "Password cannot exceed 20 characters")
+    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/, 
+      "Password must contain at least one uppercase, one lowercase, and one number"),
+  email: z.string().email("Please enter a valid email address")
+});
+
+const signinSchema=z.object({
+  email:z.string().email("invalid email address"),
+  password:z.string().min(1,"password is requiresd")
 })
 
-app.post("/api/v1/signin",(req,res)=>{
-    
-})
+
+
+app.post("/api/v1/signup", async (req, res) => {
+  const validationResult = signupSchema.safeParse(req.body);
+  
+  if (!validationResult.success) {
+    res.status(400).json({
+      success: false,
+      message: "Validation failed",
+      errors: validationResult.error.issues.map(issue => ({
+        field: issue.path.join('.'),
+        message: issue.message
+      }))
+    });
+  }
+
+  try {
+    const existingUser = await User.findOne({ 
+      $or: [
+        { username: req.body.username },
+        { email: req.body.email }
+      ]
+    });
+
+    if (existingUser) {
+   res.status(409).json({
+        success: false,
+        message: "Username or email already exists"
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(req.body.password, 10);
+    const user = await User.create({
+      username: req.body.username,
+      email: req.body.email,
+      password: hashedPassword
+    });
+
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET!,
+      { expiresIn: '1h' }
+    );
+
+ res.status(201).json({
+      success: true,
+      message: "User created successfully",
+      data: {
+        userId: user._id,
+        token,
+        username: user.username
+      }
+    });
+
+  } catch (error) {
+    console.error("Signup error:", error);
+ res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+
+
+
+
+app.post("/api/v1/signin", async (req, res) => {
+  const validation = signinSchema.safeParse(req.body);
+  if (!validation.success) {
+      res.status(400).json({
+      success: false,
+      message: "Validation failed",
+     
+    });
+  }
+
+  const { email, password } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+ if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password"
+      });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+  res.status(401).json({
+        success: false,
+        message: "Invalid email or password"
+      });
+    }
+
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET!,
+      { expiresIn: '1h' }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Login successful",
+      data: {
+        userId: user._id,
+        token,
+        username: user.username
+      }
+    });
+
+  } catch (error) {
+    console.error("Signin error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
 app.post("/api/v1/content",(req,res)=>{
     
 })
@@ -28,3 +176,9 @@ app.post("/api/v1/brain/:shareLink",(req,res)=>{
     
 })
  
+
+
+
+app.listen(3000, () => {
+  console.log("Server running on http://localhost:3000");
+});
