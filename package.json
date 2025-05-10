@@ -5,7 +5,7 @@
   "scripts": {
     "clean": "rimraf dist",
     "build": "npm run clean && tsc",
-    "dev": "npm run build && nodemon dist/server.js"
+    "dev": "npm run build && nodemon dist/index.js"
   },
   "keywords": [],
   "author": "",
@@ -17,7 +17,8 @@
     "dotenv": "^16.5.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.14.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "zod": "^3.24.4"
   },
   "devDependencies": {
     "@types/dotenv": "^6.1.1",
