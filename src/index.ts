@@ -1,6 +1,5 @@
 import dotenv from 'dotenv'
 dotenv.config();
-
 import express from "express";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
@@ -9,17 +8,9 @@ import bcrypt from "bcrypt";
 import { User, Content, Tag, Link } from "./db"; 
 import connectDB from "./db";
 import { emit, title } from 'process';
-
-
 const app = express();
 app.use(express.json());
-
 connectDB(); 
-
-
-
-
-
 const signupSchema = z.object({
   username: z.string()
     .min(3, "Username must be at least 3 characters")
@@ -32,23 +23,18 @@ const signupSchema = z.object({
       "Password must contain at least one uppercase, one lowercase, and one number"),
   email: z.string().email("Please enter a valid email address")
 });
-
 const signinSchema=z.object({
   email:z.string().email("invalid email address"),
   password:z.string().min(1,"password is requiresd")
 })
-
 const constentsschema=z.object({
   title:z.string().min(1,""),
   link :z.string().url(""),
   type :z.enum(["document", "tweet", "youtube", "link"]),
   tags :z.array(z.string()).nonempty(""),
-
 })
-
 app.post("/api/v1/signup", async (req, res) => {
   const validationResult = signupSchema.safeParse(req.body);
-  
   if (!validationResult.success) {
     res.status(400).json({
       success: false,
@@ -59,7 +45,6 @@ app.post("/api/v1/signup", async (req, res) => {
       }))
     });
   }
-
   try {
     const existingUser = await User.findOne({ 
       $or: [
@@ -67,27 +52,19 @@ app.post("/api/v1/signup", async (req, res) => {
         { email: req.body.email }
       ]
     });
-
     if (existingUser) {
    res.status(409).json({
         success: false,
         message: "Username or email already exists"
       });
     }
-
     const hashedPassword = await bcrypt.hash(req.body.password, 10);
     const user = await User.create({
-      username: req.body.username,
-      email: req.body.email,
-      password: hashedPassword
+      username: req.body.username,email: req.body.email,password: hashedPassword
     });
-
     const token = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET!,
-      { expiresIn: '1h' }
+      { userId: user._id }, process.env.JWT_SECRET!, { expiresIn: '1h' }
     );
-
  res.status(201).json({
       success: true,
       message: "User created successfully",
@@ -97,7 +74,6 @@ app.post("/api/v1/signup", async (req, res) => {
         username: user.username
       }
     });
-
   } catch (error) {
     console.error("Signup error:", error);
  res.status(500).json({
@@ -107,27 +83,15 @@ app.post("/api/v1/signup", async (req, res) => {
     });
   }
 });
-
-
-
-
-
 app.post("/api/v1/signin", async (req, res) => {
   const validation = signinSchema.safeParse(req.body);
-
-
-
   if (!validation.success) {
       res.status(400).json({
       success: false,
-      message: "Validation failed",
-     
+      message: "Validation failed",     
     });
   }
-
-
-  const { email, password } = req.body;
-
+const { email, password } = req.body;
   try {
     const user = await User.findOne({ email });
  if (!user) {
@@ -136,7 +100,6 @@ app.post("/api/v1/signin", async (req, res) => {
         message: "Invalid email or password"
       });
     }
-
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
   res.status(401).json({
@@ -144,13 +107,11 @@ app.post("/api/v1/signin", async (req, res) => {
         message: "Invalid email or password"
       });
     }
-
     const token = jwt.sign(
       { userId: user._id },
       process.env.JWT_SECRET!,
       { expiresIn: '1h' }
     );
-
     res.status(200).json({
       success: true,
       message: "Login successful",
@@ -160,7 +121,6 @@ app.post("/api/v1/signin", async (req, res) => {
         username: user.username
       }
     });
-
   } catch (error) {
     console.error("Signin error:", error);
     res.status(500).json({
@@ -169,47 +129,85 @@ app.post("/api/v1/signin", async (req, res) => {
     });
   }
 });
-
-
-
 app.post("/api/v1/content",(req,res)=>{
-
   try{
     const contentvalidation = constentsschema.safeParse(req.body);
-    
 if(!contentvalidation .success){
  return  res.status(400).json({
     message:"validtion failed",
-  })
-}
+  })}
 const token=req.body.token;
 if(!token){
   return res.status(401).json({ message: "Token missing" });
 }
-
  let decode = jwt.verify(token,'secret')
-
+if(!decode){
+  res.status(404).json({
+    message:"autentication fail"
+  })
+}
  const { title, link, type, tags } = req.body;
  const content = await Content.create({ title, link, type, tags });
  return res.status(201).json({
   message:"content created ",
   content
- })
-
-  }
-
+ })}
   catch(error){
  res.status(500).json({
   message:""
- })
-  }
-    
+ })} 
 })
-app.post("/api/v1/getoncontent",(req,res)=>{
-    
+app.get("/api/v1/getoncontent",(req,res)=>{
+  try{
+    const token =req.body.Token
+const valid = jwt.verify(token,'secret')
+if(!token){
+  return res.status(401).json({message:"token missing "})
+}
+    const {type,tag}=req.query;
+    const query : any ={};
+    if(type) query.type=type
+    if(tag) query.type=tag
+    const content =await Content.find(query);
+    return res.status(200).json({
+      message: "Content fetched successfully",
+      data: content
+    });
+  }
+  catch(error){
+    console.error("Get content error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }  
 })
 app.post("/api/v1/deleateoncontent",(req,res)=>{
-    
+try{
+const token =req.body.Token
+  if(!token){
+res.status(401).json({
+  message:"token not find"
+})
+}
+  const{type,tag}=req.query;
+  const query: any ={};
+  if(type) query.type=type
+  if(tag)  query.tg=tag
+  const result =await Content.deleteMany(query);
+if(result.deletedCount===0){
+  res.status(404).json({
+    message:"content not found"
+  })
+}
+res.status(200).json({
+  success: true,
+  message: `${result.deletedCount} content(s) deleted successfully`,
+});
+} catch (error) {
+console.error("Delete error:", error);
+res.status(500).json({
+  success: false,
+  message: "Internal server error",
+});
+}    
 })
 app.post("/api/v1/brain/share",(req,res)=>{
     
@@ -217,10 +215,6 @@ app.post("/api/v1/brain/share",(req,res)=>{
 app.post("/api/v1/brain/:shareLink",(req,res)=>{
     
 })
- 
-
-
-
 app.listen(3000, () => {
   console.log("Server running on http://localhost:3000");
 });
