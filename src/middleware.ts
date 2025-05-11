@@ -1,30 +1,17 @@
-import express from "express";
-import mongoose from "mongoose";
+import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-const app=express();
-app.use(express.json())
 
-
-app.post("/api/v1/signup",(req,res)=>{
-
-})
-
-app.post("/api/v1/signin",(req,res)=>{
-    
-})
-app.post("/api/v1/content",(req,res)=>{
-    
-})
-app.post("/api/v1/getoncontent",(req,res)=>{
-    
-})
-app.post("/api/v1/deleateoncontent",(req,res)=>{
-    
-})
-app.post("/api/v1/brain/share",(req,res)=>{
-    
-})
-app.post("/api/v1/brain/:shareLink",(req,res)=>{
-    
-})
- 
+const userMiddleware = (req: any, res: Response, next: NextFunction) => {
+    const token = req.headers.authorization?.split(" ")[1]; 
+    if (!token) return res.status(403).json({ message: "Token missing" });
+  
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+      req.userId = decoded.userId;
+      next();
+    } catch (err) {
+      res.status(401).json({ message: "Invalid token" });
+    }
+  };
+  
+  export default userMiddleware;

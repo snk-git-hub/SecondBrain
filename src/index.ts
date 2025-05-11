@@ -1,133 +1,102 @@
-import dotenv from 'dotenv'
+import dotenv from 'dotenv';
 dotenv.config();
-import express from "express";
-import mongoose from "mongoose";
-import jwt from "jsonwebtoken";
-import { array, z } from "zod";
-import bcrypt, { hash } from "bcrypt";
-import { User, Content, Tag, Link } from "./db"; 
-import connectDB from "./db";
-import { emit, title } from 'process';
-import {nanoid} from 'nanoid';
+import express, { Request, Response } from 'express';
+import mongoose from 'mongoose';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
+import { z } from 'zod';
+import { nanoid } from 'nanoid';
+import connectDB from './db';
+import { UserModel, ContentModel, LinkModel } from './models';
+import userMiddleware from './middleware';
+import random from './utils';
+
 const app = express();
 app.use(express.json());
-connectDB(); 
+
+connectDB();
+
 const signupSchema = z.object({
   username: z.string()
-    .min(3, "Username must be at least 3 characters")
-    .max(10, "Username cannot exceed 10 characters")
-    .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores"),
+    .min(3)
+    .max(10)
+    .regex(/^[a-zA-Z0-9_]+$/, "Only letters, numbers, and underscores allowed"),
   password: z.string()
-    .min(8, "Password must be at least 8 characters")
-    .max(20, "Password cannot exceed 20 characters")
+    .min(8)
+    .max(20)
     .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/, 
-      "Password must contain at least one uppercase, one lowercase, and one number"),
-  email: z.string().email("Please enter a valid email address")
+      "Password must have uppercase, lowercase, and number"),
 });
-const signinSchema=z.object({
-  email:z.string().email("invalid email address"),
-  password:z.string().min(1,"password is requiresd")
-})
-const constentsschema=z.object({
-  title:z.string().min(1,""),
-  link :z.string().url(""),
-  type :z.enum(["document", "tweet", "youtube", "link"]),
-  tags :z.array(z.string()).nonempty(""),
-})
-app.post("/api/v1/signup", async (req, res) => {
-  const validationResult = signupSchema.safeParse(req.body);
-  if (!validationResult.success) {
-    res.status(400).json({
+
+const signinSchema = z.object({
+  username: z.string().min(3).max(10).regex(/^[a-zA-Z0-9_]+$/),
+  password: z.string().min(1, "Password required"),
+});
+
+const contentSchema = z.object({
+  title: z.string().min(1),
+  link: z.string().url(),
+  type: z.enum(["document", "tweet", "youtube", "link"]),
+  tags: z.array(z.string()).nonempty(),
+});
+
+app.post("/api/v1/signup", async (req: Request, res: Response) => {
+  const validation = signupSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({
       success: false,
-      message: "Validation failed",
-      errors: validationResult.error.issues.map(issue => ({
+      errors: validation.error.issues.map(issue => ({
         field: issue.path.join('.'),
         message: issue.message
       }))
     });
   }
+
   try {
-    const existingUser = await User.findOne({ 
-      $or: [
-        { username: req.body.username },
-        { email: req.body.email }
-      ]
-    });
+    const existingUser = await UserModel.findOne({ username: req.body.username });
     if (existingUser) {
-   res.status(409).json({
-        success: false,
-        message: "Username or email already exists"
-      });
+      return res.status(409).json({ success: false, message: "Username already exists" });
     }
+
     const hashedPassword = await bcrypt.hash(req.body.password, 10);
-    const user = await User.create({
-      username: req.body.username,email: req.body.email,password: hashedPassword
+    const user = await UserModel.create({
+      username: req.body.username,
+      password: hashedPassword
     });
-    const token = jwt.sign(
-      { userId: user._id }, process.env.JWT_SECRET!, { expiresIn: '1h' }
-    );
- res.status(201).json({
+
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET!, { expiresIn: '1h' });
+
+    res.status(201).json({
       success: true,
-      message: "User created successfully",
-      data: {
-        userId: user._id,
-        token,
-        username: user.username
-      }
+      data: { userId: user._id, token, username: user.username }
     });
-  } catch (error) {
-    console.error("Signup error:", error);
- res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+  } catch (err) {
+    console.error("Signup error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
-app.post("/api/v1/signin", async (req, res) => {
+
+app.post("/api/v1/signin", async (req: Request, res: Response) => {
   const validation = signinSchema.safeParse(req.body);
   if (!validation.success) {
-      res.status(400).json({
-      success: false,
-      message: "Validation failed",     
-    });
+    return res.status(400).json({ success: false, message: "Validation failed" });
   }
-const { email, password } = req.body;
+
+  const { username, password } = req.body;
   try {
-    const user = await User.findOne({ email });
- if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password"
-      });
+    const user = await UserModel.findOne({ username });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ success: false, message: "Invalid credentials" });
     }
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-  res.status(401).json({
-        success: false,
-        message: "Invalid email or password"
-      });
-    }
-    const token = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET!,
-      { expiresIn: '1h' }
-    );
+
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET!, { expiresIn: '1h' });
     res.status(200).json({
       success: true,
-      message: "Login successful",
-      data: {
-        userId: user._id,
-        token,
-        username: user.username
-      }
+      data: { userId: user._id, token, username: user.username }
     });
-  } catch (error) {
-    console.error("Signin error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+  } catch (err) {
+    console.error("Signin error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
 app.post("/api/v1/content",(req,res)=>{
@@ -210,6 +179,10 @@ res.status(500).json({
 });
 }    
 })
+
+
+
+
 app.post("/api/v1/brain/share",(req,res)=>{
     
 try{
@@ -218,9 +191,13 @@ try{
   if(!token) return res.status(401).json({message:'Token is missing'});
   const valid = jwt.verify(token,'secret')as jwt.JwtPayload;
   const userId =valid.userId;
+
+
   const content = await Content.findById(contentId);
     if (!content) return res.status(404).json({ message: "Content not found" });
+
     const shareLink = nanoid(10);
+
     const shared = await Link.create({
       hash: shareLink,
       userId: userId
@@ -230,31 +207,35 @@ try{
       link: `/api/v1/brain/${shareLink}`,
     })
   } catch(error){
+
     console.error("Share error:", error);
     res.status(500).json({ message: "Internal server error" });console.error("Share error:", error);
     res.status(500).json({ message: "Internal server error" });
   }
+  
 })
 app.post("/api/v1/brain/:shareLink",(req,res)=>{
+
   try{
     const {shareLink}=req.params;
    const shared =await Link.findOne({link:shareLink}).populate('content')
+
    if (!shared) {
     return res.status(404).json({ message: "Shared content not found" });
   }
+
   res.status(200).json({
     message: "Shared content fetched successfully",
     content: shared.content,
   });
+
   }catch(error){
+
     console.error("Fetch share error:", error);
     res.status(500).json({ message: "Internal server error" });
   }
+    
 })
 app.listen(3000, () => {
   console.log("Server running on http://localhost:3000");
 });
-
-
-// todo make the file structure 
-
