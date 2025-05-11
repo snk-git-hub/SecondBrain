@@ -210,10 +210,6 @@ res.status(500).json({
 });
 }    
 })
-
-
-
-
 app.post("/api/v1/brain/share",(req,res)=>{
     
 try{
@@ -222,13 +218,9 @@ try{
   if(!token) return res.status(401).json({message:'Token is missing'});
   const valid = jwt.verify(token,'secret')as jwt.JwtPayload;
   const userId =valid.userId;
-
-
   const content = await Content.findById(contentId);
     if (!content) return res.status(404).json({ message: "Content not found" });
-
     const shareLink = nanoid(10);
-
     const shared = await Link.create({
       hash: shareLink,
       userId: userId
@@ -238,35 +230,26 @@ try{
       link: `/api/v1/brain/${shareLink}`,
     })
   } catch(error){
-
     console.error("Share error:", error);
     res.status(500).json({ message: "Internal server error" });console.error("Share error:", error);
     res.status(500).json({ message: "Internal server error" });
   }
-  
 })
 app.post("/api/v1/brain/:shareLink",(req,res)=>{
-
   try{
     const {shareLink}=req.params;
    const shared =await Link.findOne({link:shareLink}).populate('content')
-
    if (!shared) {
     return res.status(404).json({ message: "Shared content not found" });
   }
-
   res.status(200).json({
     message: "Shared content fetched successfully",
     content: shared.content,
   });
-
   }catch(error){
-
     console.error("Fetch share error:", error);
     res.status(500).json({ message: "Internal server error" });
-
   }
-    
 })
 app.listen(3000, () => {
   console.log("Server running on http://localhost:3000");
