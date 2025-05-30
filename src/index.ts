@@ -1,18 +1,21 @@
+
 import dotenv from 'dotenv';
 dotenv.config();
 import express, { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import { z } from 'zod';
+import { string, z } from 'zod';
 import { nanoid } from 'nanoid';
 import connectDB from './db';
 import { UserModel, ContentModel, LinkModel } from './models';
 import userMiddleware from './middleware';
 import random from './utils';
+import cors from 'cors';
 
 const app = express();
 app.use(express.json());
+app.use(cors())
 
 connectDB();
 
@@ -40,10 +43,10 @@ const contentSchema = z.object({
   tags: z.array(z.string()).nonempty(),
 });
 
-app.post("/api/v1/signup", async (req: Request, res: Response) => {
+app.post("/api/v1/signup", async (req: Request, res: Response): Promise<void>=> {
   const validation = signupSchema.safeParse(req.body);
   if (!validation.success) {
-    return res.status(400).json({
+        res.status(400).json({
       success: false,
       errors: validation.error.issues.map(issue => ({
         field: issue.path.join('.'),
@@ -55,7 +58,7 @@ app.post("/api/v1/signup", async (req: Request, res: Response) => {
   try {
     const existingUser = await UserModel.findOne({ username: req.body.username });
     if (existingUser) {
-      return res.status(409).json({ success: false, message: "Username already exists" });
+     res.status(409).json({ success: false, message: "Username already exists" });
     }
 
     const hashedPassword = await bcrypt.hash(req.body.password, 10);
@@ -76,7 +79,7 @@ app.post("/api/v1/signup", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/v1/signin", async (req: Request, res: Response) => {
+app.post("/api/v1/signin", async (req: any, res: any) => {
   const validation = signinSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ success: false, message: "Validation failed" });
@@ -84,7 +87,7 @@ app.post("/api/v1/signin", async (req: Request, res: Response) => {
 
   const { username, password } = req.body;
   try {
-    const user = await UserModel.findOne({ username });
+    const user:any = await UserModel.findOne({ username });
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ success: false, message: "Invalid credentials" });
     }
@@ -100,7 +103,7 @@ app.post("/api/v1/signin", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/v1/content", userMiddleware, async (req, res) => {
+app.post("/api/v1/content", userMiddleware, async (req:any, res:any) => {
   const link = req.body.link;
   const type = req.body.type;
   await ContentModel.create({
@@ -117,7 +120,7 @@ app.post("/api/v1/content", userMiddleware, async (req, res) => {
   
 })
 
-app.get("/api/v1/content", userMiddleware, async (req, res) => {
+app.get("/api/v1/content", userMiddleware, async (req:any, res:any) => {
   // @ts-ignore
   const userId = req.userId;
   const content = await ContentModel.find({
@@ -128,7 +131,7 @@ app.get("/api/v1/content", userMiddleware, async (req, res) => {
   })
 })
 
-app.delete("/api/v1/content", userMiddleware, async (req, res) => {
+app.delete("/api/v1/content", userMiddleware, async (req:any, res:any) => {
   const contentId = req.body.contentId;
 
   await ContentModel.deleteMany({
@@ -141,7 +144,7 @@ app.delete("/api/v1/content", userMiddleware, async (req, res) => {
   })
 })
 
-app.post("/api/v1/brain/share", userMiddleware, async (req: any, res: Response) => {
+app.post("/api/v1/brain/share", userMiddleware, async (req: any, res: any) => {
   try {
     const { share } = req.body;
 
@@ -163,7 +166,7 @@ app.post("/api/v1/brain/share", userMiddleware, async (req: any, res: Response) 
   }
 });
 
-app.get("/api/v1/brain/:shareLink", async (req: Request, res: Response) => {
+app.get("/api/v1/brain/:shareLink", async (req: Request, res: any) => {
   try {
     const link = await LinkModel.findOne({ hash: req.params.shareLink });
     if (!link) return res.status(404).json({ message: "Link not found" });
